@@ -9,3 +9,5 @@ artifacts/
 data/
 .ipynb_checkpoints/
 .DS_Store
+paper/manuscript/
+*.egg-info/

@@ -1,4 +1,65 @@
-# Stock Market Future Prediction
+# Indian Option Trading Research
+
+Research code for two lines of work on Indian markets:
+
+1. **Market-state-aware options trading.** A market state engine that fuses technical-analysis layers by weighted evidence voting, and a backtest of state-gated NIFTY 50 option trades. This supports the paper *A Market-State-Aware Framework for Algorithmic Options Trading in Indian Derivatives Markets*.
+2. **Stock-return forecasting.** A leakage-aware next-period return forecasting and backtesting framework (the original content of this repository).
+
+## Repository layout
+
+```text
+market_state/     Market state engine: indicators, evidence layers, voting, declaration rule
+simulation/       Backtest and simulation of the options strategy (see simulation/README.md)
+scripts/          Data collection: pull_nifty_breeze.py (NIFTY spot, India VIX, weekly options)
+paper/            Paper figures and notes (see paper/README.md)
+results/          Tables and metrics written by the backtest
+stock_forecast/   Stock-return forecasting framework
+tests/            Tests for market_state and stock_forecast
+notes/            Research notes on forecasting
+notebooks/        Exploratory notebook
+sample_data/      AAPL daily sample used by the forecasting benchmark
+data/             Market data pulled from Breeze; not tracked on main (kept on the nifty-data branch)
+```
+
+## Options research
+
+### Market state engine
+
+`market_state` implements the engine of the paper: each layer casts a graded vote over the states (bullish trend, bearish trend, range-bound, high volatility), the votes are fused by a weighted sum, and a state is declared only when the leading score passes a threshold, a margin test and a persistence filter.
+
+```python
+from market_state import EngineConfig, run_engine
+from market_state import indicators as ind, layers as lay
+
+adx = ind.adx(high, low, close)
+votes = {
+    "trend": lay.trend_layer(ind.ema(close, 9), ind.ema(close, 21), ind.atr(high, low, close)),
+    "momentum": lay.momentum_layer(ind.rsi(close)),
+    "strength": lay.strength_layer(adx["adx"], adx["di_plus"], adx["di_minus"]),
+    "derivatives": lay.derivatives_layer(pcr),
+}
+config = EngineConfig(
+    weights={"trend": 0.3, "momentum": 0.2, "strength": 0.25, "derivatives": 0.25},
+    theta=0.55, delta=0.05, h=3,
+)
+states = run_engine(votes, config)["state"]
+```
+
+The layer thresholds and weights are a reference configuration, not yet matched to the production engine. One known limit: only the volatility layer votes for the high-volatility state, so that state's score cannot exceed that layer's weight, and it is never declared when the acceptance threshold is above that weight.
+
+`tests/test_market_state.py` checks the engine numerically against the paper's propositions (score normalisation, uniqueness of the declared state, robustness to a failed layer, bound on state switches).
+
+### Market data
+
+`scripts/pull_nifty_breeze.py` downloads NIFTY 50 spot, India VIX and weekly option contracts (with open interest) from ICICI Breeze. Run it locally, or through the "Pull NIFTY data (Breeze)" workflow in the Actions tab, which commits the CSVs to the `nifty-data` branch. Credentials are read from the environment (`BREEZE_API_KEY`, `BREEZE_API_SECRET`, `BREEZE_SESSION_TOKEN`); never commit them.
+
+```bash
+pip install breeze-connect pandas
+python scripts/pull_nifty_breeze.py --only spot
+python scripts/pull_nifty_breeze.py
+```
+
+# Stock-return forecasting framework
 
 Research framework for leakage-aware next-period stock-return forecasting and simple backtesting.
 
@@ -58,11 +119,11 @@ pip install -e ".[data,dev]"
 
 ## Use the existing AAPL data
 
-The repository contains a historical AAPL sample in `Code/stock_data.csv`.
+The repository contains a historical AAPL sample in `sample_data/stock_data.csv`.
 
 ```bash
 python -m stock_forecast.benchmark \
-  --data Code/stock_data.csv \
+  --data sample_data/stock_data.csv \
   --output-dir artifacts
 ```
 
@@ -105,7 +166,7 @@ The older LSTM experiment scaled the complete dataset before splitting it. That 
 
 ## Historical material
 
-The root Markdown files and `stockdata.ipynb` are retained as research notes/history. The old scratch scripts under `Code/` are removed except for the historical CSV dataset.
+The Markdown files in `notes/` and `notebooks/stockdata.ipynb` are retained as research notes/history. The historical CSV dataset is in `sample_data/`.
 
 ## Tests
 
