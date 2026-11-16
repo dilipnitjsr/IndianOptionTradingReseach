@@ -25,6 +25,6 @@ jobs:
         run: pytest
       - name: Run benchmark on committed AAPL sample
         run: |
-          python -m stock_forecast.benchmark             --data Code/stock_data.csv             --output-dir /tmp/benchmark
+          python -m stock_forecast.benchmark             --data sample_data/stock_data.csv             --output-dir /tmp/benchmark
           test -f /tmp/benchmark/leaderboard.csv
           test -f /tmp/benchmark/predictions.csv

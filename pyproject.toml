@@ -24,7 +24,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["stock_forecast*"]
+include = ["stock_forecast*", "market_state*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
