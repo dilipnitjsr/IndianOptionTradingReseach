@@ -54,10 +54,14 @@ def test_layers_satisfy_vote_constraint():
         lay.trend_layer(ind.ema(close, 9), ind.ema(close, 21), ind.atr(high, low, close)),
         lay.momentum_layer(ind.rsi(close)),
         lay.strength_layer(adx["adx"], adx["di_plus"], adx["di_minus"]),
-        lay.volatility_layer(ind.percentile_rank(ind.atr(high, low, close) / close, 100)),
         lay.derivatives_layer(pcr),
     ]
-    for v in votes:
+    nu = lay.volatility_evidence(ind.percentile_rank(ind.atr(high, low, close) / close, 100))
+    assert nu.between(0, 1).all()
+    shared = lay.with_volatility({str(i): v for i, v in enumerate(votes)}, nu)
+    scores = aggregate(shared, {k: 1 / len(shared) for k in shared})
+    assert np.allclose(scores["V"], nu)          # the score of V equals the shared evidence
+    for v in votes + list(shared.values()):
         arr = v.to_numpy()
         assert (arr >= 0).all() and (arr <= 1).all()
         assert (arr.sum(axis=1) <= 1 + 1e-12).all()

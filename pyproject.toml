@@ -13,6 +13,7 @@ dependencies = [
   "pandas>=2.1,<3",
   "scikit-learn>=1.4,<2",
   "joblib>=1.3,<2",
+  "scipy>=1.11,<2",
 ]
 
 [project.optional-dependencies]
@@ -22,9 +23,12 @@ data = [
 dev = [
   "pytest>=8,<9",
 ]
+figures = [
+  "matplotlib>=3.8,<4",
+]
 
 [tool.setuptools.packages.find]
-include = ["stock_forecast*", "market_state*"]
+include = ["stock_forecast*", "market_state*", "simulation*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

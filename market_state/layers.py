@@ -1,15 +1,16 @@
 """Evidence layers: each converts indicators into a vote vector over the states.
 
 A layer returns a DataFrame with one column per state in ``STATES``. Every row
-satisfies the vote constraint of the paper (eq. 12): each vote lies in [0, 1]
+satisfies the vote constraint of the paper: each vote lies in [0, 1]
 and the votes of a row sum to at most 1. Mass that is not voted is abstention.
 
 The thresholds below are the reference configuration of the paper. They are
 placeholders until they are matched to the production engine.
 
-Known limit of the reference configuration: only the volatility layer votes for
-V, so the score of V can never exceed that layer's weight. With an acceptance
-threshold above that weight the engine never declares V. See README.md.
+The four directional layers (trend, momentum, strength, derivatives) cast base
+votes over U, D and R. Volatility evidence is shared: ``with_volatility`` scales
+every layer's base votes by (1 - nu) and gives nu to V, so the score of V equals
+nu and the high-volatility state can override directional evidence.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ STATES = ["U", "D", "R", "V"]  # bullish trend, bearish trend, range-bound, high
 
 
 def ramp(x, a: float, b: float):
-    """rho(x; a, b) = min(1, max(0, (x - a) / (b - a))), for a < b (eq. 13)."""
+    """rho(x; a, b) = min(1, max(0, (x - a) / (b - a))), for a < b."""
     if not a < b:
         raise ValueError("ramp needs a < b")
     return np.clip((np.asarray(x, dtype=float) - a) / (b - a), 0.0, 1.0)
@@ -58,14 +59,28 @@ def strength_layer(adx: pd.Series, di_plus: pd.Series, di_minus: pd.Series,
     return _frame(adx.index, u, d, np.where(adx.notna(), 1.0 - g, 0.0), 0.0)
 
 
-def volatility_layer(vol_rank: pd.Series, a: float = 0.75, b: float = 0.95) -> pd.DataFrame:
-    """Layer 4: percentile rank of ATR/C. Votes only for V."""
-    return _frame(vol_rank.index, 0.0, 0.0, 0.0, ramp(vol_rank, a, b))
+def volatility_evidence(vol_rank: pd.Series, a: float = 0.75, b: float = 0.95) -> pd.Series:
+    """Shared volatility evidence nu = rho(u; a, b), u = percentile rank of ATR/C."""
+    return pd.Series(ramp(vol_rank.fillna(0.0), a, b), index=vol_rank.index)
+
+
+def with_volatility(votes: dict, nu: pd.Series) -> dict:
+    """Scale each layer's base votes by (1 - nu) and assign nu to V.
+
+    Each output row still satisfies the vote constraint: (1 - nu) * sum(base) + nu <= 1.
+    """
+    out = {}
+    for name, v in votes.items():
+        scaled = v[["U", "D", "R"]].mul(1.0 - nu, axis=0)
+        scaled["V"] = nu
+        out[name] = scaled[STATES]
+    return out
 
 
 def derivatives_layer(pcr: pd.Series, a_bull: float = 1.05, b_bull: float = 1.25,
                       a_bear: float = 0.75, b_bear: float = 0.95) -> pd.DataFrame:
-    """Layer 5: put-call ratio of open interest; a high ratio is read as bullish.
+    """Layer 4: put-call ratio of open interest; a high ratio is read as bullish,
+    a low ratio as bearish, and a ratio in between as range evidence.
 
     Needs b_bear <= a_bull so the layer never votes for U and D at once.
     """
@@ -73,4 +88,4 @@ def derivatives_layer(pcr: pd.Series, a_bull: float = 1.05, b_bull: float = 1.25
         raise ValueError("derivatives layer needs b_bear <= a_bull")
     u = ramp(pcr, a_bull, b_bull)
     d = np.where(pcr.notna(), 1.0 - ramp(pcr, a_bear, b_bear), 0.0)
-    return _frame(pcr.index, u, d, 0.0, 0.0)
+    return _frame(pcr.index, u, d, np.where(pcr.notna(), 1.0 - u - d, 0.0), 0.0)

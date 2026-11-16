@@ -1,10 +1,10 @@
 """Market state engine: weighted evidence voting with threshold, margin and persistence.
 
 Implements Section IV of the paper:
-  A_t(s) = sum_l w_l * v_t^l(s)                         (eq. 15)
-  m_t    = A_t(s1) - A_t(s2)                            (eq. 16)
-  c_t    = s1 if A_t(s1) >= theta and m_t >= delta, else undetermined   (eq. 17)
-  S_t    = c_t if c_t has held for h bars and differs from S_{t-1}, else S_{t-1}   (eq. 18)
+  A_t(s) = sum_l w_l * v_t^l(s)
+  m_t    = A_t(s1) - A_t(s2)
+  c_t    = s1 if A_t(s1) >= theta and m_t >= delta, else undetermined
+  S_t    = c_t if c_t has held for h bars and differs from S_{t-1}, else S_{t-1}
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ class EngineConfig:
 
 
 def aggregate(votes: Mapping[str, pd.DataFrame], weights: Mapping[str, float], states=STATES) -> pd.DataFrame:
-    """Aggregate evidence scores A_t(s) (eq. 15)."""
+    """Aggregate evidence scores A_t(s)."""
     names = list(weights)
     index = votes[names[0]].index
     total = np.zeros((len(index), len(states)))
@@ -55,7 +55,7 @@ def aggregate(votes: Mapping[str, pd.DataFrame], weights: Mapping[str, float], s
 
 
 def candidate(scores: pd.DataFrame, theta: float, delta: float):
-    """Candidate state c_t and margin m_t (eqs. 16 and 17)."""
+    """Candidate state c_t and margin m_t."""
     a = scores.to_numpy()
     order = np.argsort(-a, axis=1, kind="stable")
     rows = np.arange(len(a))
@@ -71,7 +71,7 @@ def candidate(scores: pd.DataFrame, theta: float, delta: float):
 
 
 def persist(cand: pd.Series, h: int) -> pd.Series:
-    """Persistence filter (eq. 18). The declared state starts as undetermined."""
+    """Persistence filter. The declared state starts as undetermined."""
     values = cand.to_numpy()
     out = np.empty(len(values), dtype=object)
     current = UNDETERMINED

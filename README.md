@@ -9,10 +9,10 @@ Research code for two lines of work on Indian markets:
 
 ```text
 market_state/     Market state engine: indicators, evidence layers, voting, declaration rule
-simulation/       Backtest and simulation of the options strategy (see simulation/README.md)
+simulation/       Simulation study on a synthetic market: generator, backtest, experiment, figures
 scripts/          Data collection: pull_nifty_breeze.py (NIFTY spot, India VIX, weekly options)
 paper/            Paper figures and notes (see paper/README.md)
-results/          Tables and metrics written by the backtest
+results/          Tables and metrics written by the simulation study
 stock_forecast/   Stock-return forecasting framework
 tests/            Tests for market_state and stock_forecast
 notes/            Research notes on forecasting
@@ -45,9 +45,21 @@ config = EngineConfig(
 states = run_engine(votes, config)["state"]
 ```
 
-The layer thresholds and weights are a reference configuration, not yet matched to the production engine. One known limit: only the volatility layer votes for the high-volatility state, so that state's score cannot exceed that layer's weight, and it is never declared when the acceptance threshold is above that weight.
+The layer thresholds and weights are a reference configuration, not yet matched to the production engine. Volatility evidence is shared by all layers (`layers.with_volatility`), so the high-volatility state can override directional evidence.
 
 `tests/test_market_state.py` checks the engine numerically against the paper's propositions (score normalisation, uniqueness of the declared state, robustness to a failed layer, bound on state switches).
+
+### Simulation study
+
+`simulation/` runs the study reported in the paper: the engine is tuned on training paths of a synthetic regime-switching market and compared with four baselines on independent test paths. See `simulation/README.md`.
+
+```bash
+pip install -e ".[dev,figures]"
+python -m simulation.experiment
+python -m simulation.figures
+```
+
+Tables are written to `results/synthetic/` and figures to `paper/figures/`. The market is synthetic, so the results describe the behaviour of the framework and are not evidence of profitability on NIFTY options.
 
 ### Market data
 
