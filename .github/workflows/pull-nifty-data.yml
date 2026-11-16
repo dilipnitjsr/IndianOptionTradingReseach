@@ -1,0 +1,85 @@
+# Runs scripts/pull_nifty_breeze.py on GitHub's servers and commits the CSVs
+# to the `nifty-data` branch. Start it by hand from the Actions tab.
+#
+# Repository secrets needed (Settings -> Secrets and variables -> Actions):
+#   BREEZE_API_KEY, BREEZE_API_SECRET, BREEZE_SESSION_TOKEN
+# The session token expires daily: update that secret before each run.
+
+name: Pull NIFTY data (Breeze)
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "Start date (YYYY-MM-DD)"
+        default: "2024-11-01"
+      end:
+        description: "End date (YYYY-MM-DD)"
+        default: "2026-11-13"
+      only:
+        description: "Dataset to pull"
+        type: choice
+        options: [all, spot, vix, options]
+        default: all
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nifty-data-pull
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install breeze-connect pandas
+
+      - name: Open the data branch (keeps files from earlier runs)
+        run: |
+          if git fetch --depth=1 origin nifty-data:refs/remotes/origin/nifty-data 2>/dev/null; then
+            git worktree add -B nifty-data databranch origin/nifty-data
+          else
+            git worktree add --detach databranch
+            cd databranch
+            git checkout --orphan nifty-data
+            git rm -rf --quiet . || true
+          fi
+
+      - name: Pull from Breeze
+        working-directory: databranch
+        env:
+          BREEZE_API_KEY: ${{ secrets.BREEZE_API_KEY }}
+          BREEZE_API_SECRET: ${{ secrets.BREEZE_API_SECRET }}
+          BREEZE_SESSION_TOKEN: ${{ secrets.BREEZE_SESSION_TOKEN }}
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          if [ "$ONLY" = "all" ]; then
+            python ../scripts/pull_nifty_breeze.py --start "$START" --end "$END"
+          else
+            python ../scripts/pull_nifty_breeze.py --start "$START" --end "$END" --only "$ONLY"
+          fi
+
+      - name: Commit data to the nifty-data branch
+        if: always()
+        working-directory: databranch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data || true
+          if git diff --cached --quiet; then
+            echo "No new data to commit."
+          else
+            git commit --quiet -m "NIFTY data pull $(date -u +%Y-%m-%d)"
+            git push origin nifty-data
+          fi
